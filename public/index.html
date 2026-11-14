@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141819">
+  <title>Tempo — Personal planner</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="firebase-config.js"></script>
+  <script defer src="storage.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#weekly" aria-label="Tempo home">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6l4.6 16a1.5 1.5 0 0 1-1.4 2H5.8a1.5 1.5 0 0 1-1.4-2L9 3Zm3 13 6-11M14.5 8.5l2.5 1.4"/></svg>
+      Tempo
+    </a>
+    <nav aria-label="Planner views">
+      <a id="weekly-tab" href="#weekly">Weekly</a>
+      <a id="timepad-tab" href="#timepad">Time Pad</a>
+    </nav>
+    <div class="account"><span id="storage-status">This browser</span><button id="sign-out" type="button" hidden>Sign out</button></div>
+  </header>
+
+  <main>
+    <section id="welcome" class="welcome" hidden>
+      <h1>Open your planner</h1>
+      <p id="welcome-text">Sign in to access your private Tempo.</p>
+      <button class="primary" id="sign-in" type="button" hidden>Sign in with Google</button>
+    </section>
+
+    <section id="weekly" aria-labelledby="week-title">
+      <div class="page-head">
+        <div><p class="eyebrow">YOUR CALENDAR</p><h1 id="week-title"></h1></div>
+        <div class="actions">
+          <div class="week-nav">
+            <button type="button" id="prev-week" aria-label="Previous week">‹</button>
+            <button type="button" id="today">Today</button>
+            <button type="button" id="next-week" aria-label="Next week">›</button>
+          </div>
+          <button id="tags" type="button">Tags</button>
+          <button id="add-event" class="primary" type="button">+ New event</button>
+        </div>
+      </div>
+      <div class="calendar" aria-label="Weekly calendar">
+        <div class="calendar-header">
+          <div id="days" class="calendar-row"></div>
+          <div id="deadlines" class="calendar-row" hidden></div>
+        </div>
+        <div class="calendar-scroll" id="calendar-scroll" tabindex="0" aria-label="Hourly calendar grid">
+          <div id="calendar-grid" class="calendar-row"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="timepad" aria-labelledby="timepad-title" hidden>
+      <div class="page-head">
+        <div><p class="eyebrow">YOUR TASKS</p><h1 id="timepad-title">Time Pad</h1></div>
+        <div class="view-toggle" aria-label="Task layout">
+          <button type="button" id="list-view" aria-pressed="true">List</button>
+          <button type="button" id="matrix-view" aria-pressed="false">Matrix</button>
+        </div>
+      </div>
+      <form id="quick-add" class="quick-add">
+        <label class="sr-only" for="quick-title">Task name</label>
+        <input id="quick-title" name="title" placeholder="What do you need to do?" maxlength="160" required>
+        <button type="button" id="task-details">Add details</button>
+        <button class="primary" type="submit">+ Add task</button>
+      </form>
+      <div id="task-list"></div>
+    </section>
+  </main>
+
+  <dialog id="editor">
+    <form id="editor-form">
+      <div class="dialog-head"><h2 id="editor-title"></h2><button type="button" class="close" aria-label="Close dialog" data-close>×</button></div>
+      <div id="editor-fields" class="fields"></div>
+      <p class="form-error" id="editor-error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="delete-item" class="danger" hidden>Delete</button>
+        <div class="actions"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Save</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="tag-editor">
+    <div class="dialog-head"><h2>Calendar tags</h2><button type="button" class="close" aria-label="Close tags" data-close>×</button></div>
+    <div id="tag-list"></div>
+    <form id="tag-form" class="tag-form">
+      <label>Tag name<input name="name" placeholder="e.g. Lectures" maxlength="40" required></label>
+      <label>Colour<select name="color"></select></label>
+      <button type="submit" class="primary">Add tag</button>
+      <button type="button" id="cancel-tag-edit" hidden>Cancel</button>
+    </form>
+    <p class="form-error" id="tag-error" role="alert" hidden></p>
+  </dialog>
+
+  <div id="notice" class="notice" role="status" hidden></div>
+</body>
+</html>
