@@ -12,8 +12,9 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory public
 
 Then visit <http://127.0.0.1:8765>. Keep using that same address to see the items you added there. Local data belongs to the browser and origin and does not transfer to Firebase automatically.
 
+- Home opens a ten-card gallery. Scroll or drag to browse, click a card to expand it, then click again to open the feature. The plus controls, thumbnails, arrow keys and Escape also navigate the gallery. Weekly and Timepad open the planner tools. The other eight cards and About contain placeholders.
 - In Weekly, use **Tags** to create colour categories. Click any hour to add an event in that slot. A weekly series repeats on the original weekday through the specified date. Editing or deleting a series applies to every occurrence.
-- In Time Pad, type a name and press **Enter** to capture it. Use **Add details** or click an existing task to add a due date, set a time block, or assign a quadrant.
+- In Time Pad, type a name on the sticky note and press **Enter** or click **Add task**. Set a due date, choose a time block, or assign a quadrant on the note or by clicking an existing task.
 - **Show in Weekly** puts a timed task in its chosen slot. A task with only a due date appears at the top of that day. Tasks without either stay in Time Pad.
 
 ## Connect a personal Firebase project

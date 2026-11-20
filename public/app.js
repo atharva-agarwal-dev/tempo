@@ -3,9 +3,11 @@
 const $ = id => document.getElementById(id);
 const editor = $('editor');
 const form = $('editor-form');
+const quickForm = $('quick-add');
 const tagEditor = $('tag-editor');
 const tagForm = $('tag-form');
 const dayFormat = new Intl.DateTimeFormat('en', { weekday: 'short' });
+const fullDayFormat = new Intl.DateTimeFormat('en', { weekday: 'long' });
 const rangeFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' });
 const dueFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
 const quadrants = [
@@ -93,19 +95,18 @@ function setRecords(next) {
 }
 
 function currentView() {
-  return location.hash === '#timepad' ? 'timepad' : 'weekly';
+  return TempoShell.currentView();
 }
 
 function render() {
   const view = currentView();
+  TempoShell.render(view);
   for (const name of ['weekly', 'timepad']) {
     $(name).hidden = !store || view !== name;
-    if (store && view === name) $(name + '-tab').setAttribute('aria-current', 'page');
-    else $(name + '-tab').removeAttribute('aria-current');
   }
   if (!store) return;
   if (view === 'weekly') renderWeek();
-  else renderTasks();
+  else if (view === 'timepad') renderTasks();
   if (tagEditor.open) renderTags();
 }
 
@@ -149,7 +150,9 @@ function placeEntries(entries) {
 
 function setEventColour(node, item) {
   const tag = records.find(record => record.type === 'tag' && record.id === item.tagId);
-  const [bg, edge, text] = palette[tag?.color] ?? (item.type === 'task' ? palette.Violet : palette.Teal);
+  const [bg, edge, text] = palette[tag?.color] ?? (item.type === 'task'
+    ? ['#4d3035', '#ca9095', '#ffe3df']
+    : ['#523725', '#d8a471', '#fbe7d2']);
   node.style.setProperty('--event-bg', bg);
   node.style.setProperty('--event-edge', edge);
   node.style.setProperty('--event-text', text);
@@ -170,7 +173,13 @@ function renderWeek() {
     const key = dateKey(date);
     const isToday = key === today;
     const heading = element('div', 'day-heading' + (isToday ? ' is-today' : ''));
-    heading.append(element('span', '', dayFormat.format(date)), element('span', 'day-number', date.getDate()));
+    const strip = element('div', 'day-strip');
+    const weekday = fullDayFormat.format(date);
+    const shortName = element('span', 'day-name day-name-short', dayFormat.format(date));
+    shortName.title = weekday;
+    strip.append(shortName, element('span', 'day-name day-name-full', weekday),
+      element('span', 'day-number', date.getDate()));
+    heading.append(strip);
     if (isToday) heading.setAttribute('aria-current', 'date');
     $('days').append(heading);
 
@@ -224,7 +233,7 @@ function updateNowLine() {
 }
 
 function taskGroup(title, tasks, options = {}) {
-  const group = element('section', 'task-group' + (options.wide ? ' wide' : ''));
+  const group = element('section', 'task-group');
   group.append(element('h3', options.overdue ? 'overdue' : '', title));
   if (!tasks.length) {
     group.append(element('p', 'empty', 'No tasks here.'));
@@ -263,12 +272,30 @@ function renderTasks() {
   const today = dateKey(new Date());
   $('list-view').setAttribute('aria-pressed', String(!matrix));
   $('matrix-view').setAttribute('aria-pressed', String(matrix));
-  list.classList.toggle('matrix', matrix);
   list.replaceChildren();
   if (matrix) {
-    for (const [value, title] of quadrants) list.append(taskGroup(title, active.filter(task => task.quadrant === value)));
+    const grid = element('div', 'matrix');
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Eisenhower matrix');
+    const importance = element('div', 'matrix-axis matrix-axis-horizontal', 'Important →');
+    const urgency = element('div', 'matrix-axis matrix-axis-vertical');
+    urgency.append(element('span', '', 'Urgent'));
+    grid.append(importance, urgency);
+
+    const positions = [
+      ['delegate', 'Urgent only'],
+      ['do', 'Urgent & important'],
+      ['later', 'Neither'],
+      ['plan', 'Important only'],
+    ];
+    for (const [value, title] of positions) {
+      const quadrant = taskGroup(title, active.filter(task => task.quadrant === value));
+      quadrant.dataset.quadrant = value;
+      grid.append(quadrant);
+    }
+    list.append(grid);
     const unclassified = active.filter(task => !task.quadrant);
-    if (unclassified.length) list.append(taskGroup('Unclassified', unclassified, { wide: true }));
+    if (unclassified.length) list.append(taskGroup('Unclassified', unclassified));
   } else if (active.length) {
     const sections = [
       ['Overdue', active.filter(task => task.due && task.due < today), { overdue: true }],
@@ -277,33 +304,51 @@ function renderTasks() {
     ];
     for (const [title, group, options] of sections) if (group.length) list.append(taskGroup(title, group, options));
   } else {
-    list.append(element('p', 'empty', 'Nothing on your list. Type a task above and press Enter to add it.'));
+    list.append(element('p', 'empty', 'Nothing on your list yet.'));
   }
-  if (completed.length) list.append(taskGroup('Completed', completed, { wide: true }));
+  if (completed.length) list.append(taskGroup('Completed', completed));
 }
 
 function addOptions(select, options) {
   for (const [value, label] of options) select.add(new Option(label, value));
 }
 
-function updateEditorFields() {
-  if (editing.type === 'event') {
-    const repeating = form.elements.repeat.checked;
-    $('repeat-fields').hidden = !repeating;
-    form.elements.repeatUntil.disabled = !repeating;
-    form.elements.repeatUntil.required = repeating;
-    form.elements.repeatUntil.min = form.elements.date.value;
-  } else {
-    const showing = form.elements.showWeekly.checked;
-    const timed = showing && form.elements.timed.checked;
-    $('weekly-options').hidden = !showing;
-    $('slot-fields').hidden = !timed;
-    form.elements.timed.disabled = !showing;
-    for (const name of ['slotDate', 'start', 'end']) {
-      form.elements[name].disabled = !timed;
-      form.elements[name].required = timed;
-    }
+function updateTaskSchedule(taskForm, changedField) {
+  const fields = taskForm.elements;
+  if (changedField === 'due' && !fields.timed.checked) {
+    fields.slotDate.value = fields.due.value || dateKey(new Date());
   }
+  const showing = fields.showWeekly.checked;
+  const timed = showing && fields.timed.checked;
+  taskForm.querySelector('[data-weekly-options]').hidden = !showing;
+  taskForm.querySelector('[data-slot-fields]').hidden = !timed;
+  fields.timed.disabled = !showing;
+  for (const name of ['slotDate', 'start', 'end']) {
+    fields[name].disabled = !timed;
+    fields[name].required = timed;
+  }
+}
+
+function initTaskFields(taskForm, container, item) {
+  container.append($('task-fields').content.cloneNode(true));
+  const fields = taskForm.elements;
+  fields.due.value = item?.due ?? '';
+  fields.showWeekly.checked = Boolean(item?.showWeekly);
+  fields.timed.checked = Boolean(item?.slot);
+  fields.slotDate.value = item?.slot?.date ?? item?.due ?? dateKey(new Date());
+  fields.start.value = item?.slot?.start ?? '09:00';
+  fields.end.value = item?.slot?.end ?? '10:00';
+  addOptions(fields.quadrant, [['', 'Unclassified'], ...quadrants]);
+  fields.quadrant.value = item?.quadrant ?? '';
+  updateTaskSchedule(taskForm);
+}
+
+function updateRepeatFields() {
+  const repeating = form.elements.repeat.checked;
+  $('repeat-fields').hidden = !repeating;
+  form.elements.repeatUntil.disabled = !repeating;
+  form.elements.repeatUntil.required = repeating;
+  form.elements.repeatUntil.min = form.elements.date.value;
 }
 
 function openEditor(type, item, defaults = {}) {
@@ -334,32 +379,12 @@ function openEditor(type, item, defaults = {}) {
       .sort((a, b) => a.title.localeCompare(b.title)).map(tag => [tag.id, tag.title])]);
     form.elements.tagId.value = item?.tagId ?? '';
     if (form.elements.tagId.selectedIndex < 0) form.elements.tagId.value = '';
+    updateRepeatFields();
   } else {
-    $('editor-fields').innerHTML = shared + `
-      <label>Due date <input type="date" name="due"></label>
-      <label class="check"><input type="checkbox" name="showWeekly"> Show in Weekly</label>
-      <div class="field-group" id="weekly-options">
-        <label class="check"><input type="checkbox" name="timed"> Pick a time block</label>
-        <div class="field-group" id="slot-fields">
-          <label>Calendar date<input type="date" name="slotDate"></label>
-          <div class="field-row">
-            <label>Start time<input type="time" name="start"></label>
-            <label>End time<input type="time" name="end"></label>
-          </div>
-        </div>
-      </div>
-      <label>Eisenhower quadrant<select name="quadrant"></select></label>`;
-    form.elements.due.value = item?.due ?? '';
-    form.elements.showWeekly.checked = Boolean(item?.showWeekly);
-    form.elements.timed.checked = Boolean(item?.slot);
-    form.elements.slotDate.value = item?.slot?.date ?? item?.due ?? dateKey(new Date());
-    form.elements.start.value = item?.slot?.start ?? '09:00';
-    form.elements.end.value = item?.slot?.end ?? '10:00';
-    addOptions(form.elements.quadrant, [['', 'Unclassified'], ...quadrants]);
-    form.elements.quadrant.value = item?.quadrant ?? '';
+    $('editor-fields').innerHTML = shared;
+    initTaskFields(form, $('editor-fields'), item);
   }
-  form.elements.title.value = item?.title ?? defaults.title ?? '';
-  updateEditorFields();
+  form.elements.title.value = item?.title ?? '';
   editor.showModal();
   form.elements.title.focus();
 }
@@ -369,18 +394,24 @@ function showError(id, message) {
   $(id).hidden = false;
 }
 
-function taskRecord(title) {
+function taskRecord(fields, title, item) {
+  const showWeekly = fields.showWeekly.checked;
   return {
-    id: newId(), type: 'task', title, createdAt: Date.now(),
-    due: '', showWeekly: false, slot: null, quadrant: '', done: false,
+    ...(item ?? { id: newId(), type: 'task', createdAt: Date.now(), done: false }),
+    title, due: fields.due.value, showWeekly,
+    slot: showWeekly && fields.timed.checked
+      ? { date: fields.slotDate.value, start: fields.start.value, end: fields.end.value } : null,
+    quadrant: fields.quadrant.value,
   };
 }
 
+function invalidTimeRange(fields) {
+  return fields.start && !fields.start.disabled && fields.end.value <= fields.start.value;
+}
+
 form.addEventListener('change', event => {
-  if (event.target.name === 'due' && !form.elements.timed.checked) {
-    form.elements.slotDate.value = form.elements.due.value || dateKey(new Date());
-  }
-  updateEditorFields();
+  if (editing.type === 'event') updateRepeatFields();
+  else updateTaskSchedule(form, event.target.name);
 });
 
 form.addEventListener('submit', async event => {
@@ -389,7 +420,7 @@ form.addEventListener('submit', async event => {
   const fields = form.elements;
   const title = fields.title.value.trim();
   if (!title) return showError('editor-error', 'Enter a name.');
-  if (fields.start && !fields.start.disabled && fields.end.value <= fields.start.value) {
+  if (invalidTimeRange(fields)) {
     return showError('editor-error', 'End time must be after start time.');
   }
   let record;
@@ -400,13 +431,7 @@ form.addEventListener('submit', async event => {
       repeatUntil: fields.repeat.checked ? fields.repeatUntil.value : '',
     };
   } else {
-    record = {
-      ...(item ?? taskRecord(title)), title, due: fields.due.value,
-      showWeekly: fields.showWeekly.checked,
-      slot: fields.showWeekly.checked && fields.timed.checked
-        ? { date: fields.slotDate.value, start: fields.start.value, end: fields.end.value } : null,
-      quadrant: fields.quadrant.value,
-    };
+    record = taskRecord(fields, title, item);
   }
   const submit = form.querySelector('[type=submit]');
   submit.disabled = true;
@@ -415,7 +440,6 @@ form.addEventListener('submit', async event => {
   try {
     await store.save(record);
     if (editor.open && editing.item === item && editing.type === type) editor.close();
-    if (type === 'task' && !item && $('quick-title').value.trim() === title) $('quick-title').value = '';
   } catch {
     showError('editor-error', 'Could not save. Try again.');
   } finally {
@@ -441,18 +465,43 @@ $('delete-item').addEventListener('click', async () => {
   }
 });
 
-$('quick-add').addEventListener('submit', async event => {
+initTaskFields(quickForm, $('quick-details'));
+quickForm.addEventListener('change', event => updateTaskSchedule(quickForm, event.target.name));
+$('quick-title').addEventListener('keydown', event => {
+  if (event.key !== 'Enter' || event.isComposing) return;
   event.preventDefault();
+  if (!event.repeat) quickForm.requestSubmit();
+});
+quickForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = quickForm.querySelector('[type=submit]');
+  if (submit.disabled || !store) return;
+  const fields = quickForm.elements;
   const input = $('quick-title');
   const title = input.value.trim();
-  if (!title) return input.focus();
-  const submit = event.currentTarget.querySelector('[type=submit]');
+  if (!title) {
+    input.focus();
+    return showError('quick-error', 'Enter a task name.');
+  }
+  if (invalidTimeRange(fields)) return showError('quick-error', 'End time must be after start time.');
+  const record = taskRecord(fields, title);
   submit.disabled = true;
+  $('quick-error').hidden = true;
   try {
-    await store.save(taskRecord(title));
-    if (input.value.trim() === title) input.value = '';
+    await store.save(record);
+    if (input.value.trim() === title) {
+      input.value = '';
+      fields.due.value = '';
+      fields.showWeekly.checked = false;
+      fields.timed.checked = false;
+      fields.slotDate.value = dateKey(new Date());
+      fields.start.value = '09:00';
+      fields.end.value = '10:00';
+      fields.quadrant.value = '';
+      updateTaskSchedule(quickForm);
+    }
   } catch {
-    notify('Could not add that task. Try again.');
+    showError('quick-error', 'Could not add that task. Try again.');
   } finally {
     submit.disabled = false;
     input.focus();
@@ -522,7 +571,6 @@ $('tags').addEventListener('click', () => {
 $('add-event').addEventListener('click', () => openEditor('event', null, {
   date: dateKey(dateKey(monday(new Date())) === dateKey(week) ? new Date() : week),
 }));
-$('task-details').addEventListener('click', () => openEditor('task', null, { title: $('quick-title').value }));
 $('prev-week').addEventListener('click', () => { week = offsetDay(week, -7); renderWeek(); });
 $('next-week').addEventListener('click', () => { week = offsetDay(week, 7); renderWeek(); });
 $('today').addEventListener('click', () => { week = monday(new Date()); renderWeek(); });
